@@ -32,6 +32,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", handler.Health)
 	mux.HandleFunc("GET /api/db-health", handler.DatabaseHealth)
+	mux.HandleFunc("GET /api/schema-health", handler.SchemaHealth)
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,

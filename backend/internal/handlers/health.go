@@ -9,6 +9,7 @@ import (
 
 type DatabaseHealthChecker interface {
 	Ping(ctx context.Context) error
+	SchemaTables(ctx context.Context) ([]string, error)
 }
 
 type Handler struct {
@@ -20,6 +21,13 @@ type healthResponse struct {
 	Service  string `json:"service"`
 	Database string `json:"database,omitempty"`
 	Message  string `json:"message,omitempty"`
+}
+
+type schemaHealthResponse struct {
+	Status  string   `json:"status"`
+	Service string   `json:"service"`
+	Tables  []string `json:"tables,omitempty"`
+	Message string   `json:"message,omitempty"`
 }
 
 func New(database DatabaseHealthChecker) *Handler {
@@ -51,7 +59,36 @@ func (h *Handler) DatabaseHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func writeJSON(w http.ResponseWriter, statusCode int, payload healthResponse) {
+func (h *Handler) SchemaHealth(w http.ResponseWriter, r *http.Request) {
+	tables, err := h.database.SchemaTables(r.Context())
+	if err != nil {
+		log.Printf("schema health check failed: %v", err)
+		writeJSON(w, http.StatusServiceUnavailable, schemaHealthResponse{
+			Status:  "error",
+			Service: "schema",
+			Message: "schema unavailable",
+		})
+		return
+	}
+
+	if len(tables) != 2 {
+		writeJSON(w, http.StatusServiceUnavailable, schemaHealthResponse{
+			Status:  "error",
+			Service: "schema",
+			Tables:  tables,
+			Message: "required tables missing",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, schemaHealthResponse{
+		Status:  "ok",
+		Service: "schema",
+		Tables:  tables,
+	})
+}
+
+func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
