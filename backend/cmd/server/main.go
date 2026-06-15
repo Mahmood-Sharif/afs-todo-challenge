@@ -1,42 +1,47 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"log"
 	"net/http"
-	"os"
+	"time"
+
+	"afs-todo-backend/internal/config"
+	"afs-todo-backend/internal/database"
+	"afs-todo-backend/internal/handlers"
 )
 
-type healthResponse struct {
-	Status  string `json:"status"`
-	Service string `json:"service"`
-}
-
 func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("configuration error: %v", err)
+	}
+
+	db, err := database.Connect(context.Background(), cfg.Database)
+	if err != nil {
+		log.Fatalf("database connection failed: %v", err)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("database close failed: %v", err)
+		}
+	}()
+
+	handler := handlers.New(db)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", healthHandler)
+	mux.HandleFunc("GET /api/health", handler.Health)
+	mux.HandleFunc("GET /api/db-health", handler.DatabaseHealth)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	server := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Printf("backend listening on port %s", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	log.Printf("backend connected to postgres at %s:%s", cfg.Database.Host, cfg.Database.Port)
+	log.Printf("backend listening on port %s", cfg.Port)
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("server failed: %v", err)
-	}
-}
-
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-
-	response := healthResponse{
-		Status:  "ok",
-		Service: "backend",
-	}
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("failed to write health response: %v", err)
 	}
 }
