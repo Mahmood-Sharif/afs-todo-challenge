@@ -66,6 +66,31 @@ The backend reads configuration from environment variables:
 - `DB_PASSWORD`: PostgreSQL password
 - `DB_NAME`: PostgreSQL database name
 - `DB_SSLMODE`: PostgreSQL SSL mode
+- `JWT_SECRET`: secret used to sign authentication JWTs
+- `JWT_EXPIRY_HOURS`: number of hours before auth cookies expire
+
+## Authentication
+
+Phase 4 adds backend authentication with HTTP-only cookie-based JWTs.
+
+Passwords are hashed with bcrypt before storage. This means plain-text
+passwords are never stored in PostgreSQL, and `password_hash` is never returned
+from the API.
+
+Login creates a signed JWT and stores it in an HTTP-only cookie named
+`afs_auth_token`. HTTP-only cookies help keep tokens out of browser JavaScript,
+which reduces exposure if frontend code is ever compromised. The cookie uses
+`SameSite=Lax`, which is suitable for local development and same-site app flows.
+
+Auth endpoints:
+
+- `POST /api/auth/register`: create a user
+- `POST /api/auth/login`: authenticate and set the auth cookie
+- `POST /api/auth/logout`: clear the auth cookie
+- `GET /api/auth/me`: return the authenticated user
+
+The `/api/auth/me` route is protected by middleware that validates the auth
+cookie and places the authenticated `user_id` into the request context.
 
 ## Run with Docker Compose
 
@@ -130,6 +155,44 @@ Expected response:
 }
 ```
 
+## Test Authentication
+
+Register a user:
+
+```bash
+curl -i -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"Mahmood\",\"email\":\"mahmood@example.com\",\"password\":\"password123\"}"
+```
+
+Log in and save the HTTP-only cookie:
+
+```bash
+curl -i -c cookies.txt -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"mahmood@example.com\",\"password\":\"password123\"}"
+```
+
+Get the current authenticated user:
+
+```bash
+curl -i -b cookies.txt http://localhost:8080/api/auth/me
+```
+
+Log out:
+
+```bash
+curl -i -b cookies.txt -c cookies.txt -X POST http://localhost:8080/api/auth/logout
+```
+
+Confirm the session was cleared:
+
+```bash
+curl -i -b cookies.txt http://localhost:8080/api/auth/me
+```
+
+Expected result after logout: HTTP `401` with `{"error":"unauthorized"}`.
+
 ## Reset the Database Volume
 
 To remove the local PostgreSQL volume and force migrations to run against a
@@ -142,7 +205,7 @@ docker compose up --build
 
 ## Current Phase Status
 
-Phase 3 is complete:
+Phase 4 is complete:
 
 - Created project skeleton.
 - Added Docker Compose orchestration for frontend, backend, and PostgreSQL.
@@ -155,9 +218,12 @@ Phase 3 is complete:
 - Added SQL migrations for `users` and `todos`.
 - Added automatic migration execution on backend startup.
 - Added `GET /api/schema-health` for schema verification.
+- Added backend registration, login, logout, and current-user auth endpoints.
+- Added bcrypt password hashing.
+- Added HTTP-only cookie-based JWT authentication.
+- Added auth middleware for protected backend routes.
 
 Not included yet:
 
-- Authentication
 - Todo CRUD
 - Frontend login, registration, or todo dashboard

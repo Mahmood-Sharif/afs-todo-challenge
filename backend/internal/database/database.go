@@ -59,6 +59,10 @@ func (db *Database) Close() error {
 	return db.conn.Close()
 }
 
+func (db *Database) SQL() *sql.DB {
+	return db.conn
+}
+
 func (db *Database) SchemaTables(ctx context.Context) ([]string, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()

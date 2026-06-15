@@ -29,6 +29,8 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       DB_NAME: ${POSTGRES_DB:?POSTGRES_DB is required}
       DB_SSLMODE: disable
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:?JWT_EXPIRY_HOURS is required}
     networks:
       - afs-todo-network
 

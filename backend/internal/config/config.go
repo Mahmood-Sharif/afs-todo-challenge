@@ -3,12 +3,14 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
 type Config struct {
 	Port     string
 	Database DatabaseConfig
+	Auth     AuthConfig
 }
 
 type DatabaseConfig struct {
@@ -18,6 +20,11 @@ type DatabaseConfig struct {
 	Password string
 	Name     string
 	SSLMode  string
+}
+
+type AuthConfig struct {
+	JWTSecret      string
+	JWTExpiryHours int
 }
 
 func Load() (Config, error) {
@@ -31,7 +38,16 @@ func Load() (Config, error) {
 			Name:     os.Getenv("DB_NAME"),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
+		Auth: AuthConfig{
+			JWTSecret: os.Getenv("JWT_SECRET"),
+		},
 	}
+
+	expiryHours, err := parsePositiveInt("JWT_EXPIRY_HOURS", os.Getenv("JWT_EXPIRY_HOURS"))
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.Auth.JWTExpiryHours = expiryHours
 
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
@@ -53,6 +69,8 @@ func (cfg Config) validate() error {
 		{key: "DB_PASSWORD", value: cfg.Database.Password},
 		{key: "DB_NAME", value: cfg.Database.Name},
 		{key: "DB_SSLMODE", value: cfg.Database.SSLMode},
+		{key: "JWT_SECRET", value: cfg.Auth.JWTSecret},
+		{key: "JWT_EXPIRY_HOURS", value: fmt.Sprintf("%d", cfg.Auth.JWTExpiryHours)},
 	}
 
 	for _, item := range required {
@@ -66,6 +84,23 @@ func (cfg Config) validate() error {
 	}
 
 	return nil
+}
+
+func parsePositiveInt(key string, value string) (int, error) {
+	if strings.TrimSpace(value) == "" {
+		return 0, fmt.Errorf("%s is required", key)
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a number", key)
+	}
+
+	if parsed <= 0 {
+		return 0, fmt.Errorf("%s must be greater than zero", key)
+	}
+
+	return parsed, nil
 }
 
 func getEnv(key string, fallback string) string {
